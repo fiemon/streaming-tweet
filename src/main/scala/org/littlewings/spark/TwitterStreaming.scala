@@ -1,7 +1,8 @@
 package org.littlewings.spark
 
-import org.apache.lucene.analysis.ja.JapaneseAnalyzer
+//import org.apache.lucene.analysis.ja.JapaneseAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
+import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseAnalyzer
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.streaming.{Durations, StreamingContext}
@@ -24,7 +25,7 @@ object TwitterStreaming {
     //sparkconf 設定
     val conf = new SparkConf().setAppName("Twitter Streaming")
     // sparkstreamcontext設定
-    val ssc = new StreamingContext(conf, Durations.minutes(1L))
+    val ssc = new StreamingContext(conf, Durations.minutes(30L))
     val filter = if (args.isEmpty) Nil else args.toList
     val stream = TwitterUtils.createStream(ssc, None, filter)
     println("\n====================== stream ======================")
