@@ -1,16 +1,15 @@
 package org.littlewings.spark
-
 //import org.apache.lucene.analysis.ja.JapaneseAnalyzer
+import org.apache.spark.rdd.JdbcRDD
 import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.spark.SparkConf
+import org.apache.spark.SparkContext._
+import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.rdd.RDD._
 import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.streaming.{Durations, StreamingContext}
 import java.util.Properties
 import java.sql.{Connection, DriverManager, ResultSet}
-
-
-//import org.atilika.kuromoji.{Token, Tokenizer}
 
 object TwitterStreaming {
 
@@ -28,9 +27,11 @@ object TwitterStreaming {
     System.setProperty("twitter4j.oauth.accessTokenSecret", config.get("oauth.accessTokenSecret").toString)
 
     println(config.get("oauth.accessTokenSecret").toString)
+//    val db = TwitterStreaming.dbconnection(config.get("db.user").toString, config.get("db.password").toString)
 
     //sparkconf 設定
     val conf = new SparkConf().setAppName("Twitter Streaming")
+//    val sc = new SparkContext(conf)
     // sparkstreamcontext設定
     val minuteunit: Long = if (args(0).isEmpty) 5 else args(0).toLong
     val ssc = new StreamingContext(conf, Durations.minutes(minuteunit))
@@ -41,7 +42,7 @@ object TwitterStreaming {
     //    println(stream)
     //    System.exit(0)
 
-    val streamtemp = stream
+    val tweetRDD = stream
       .flatMap { status =>
         val text = status.getText.replaceAll("http(s*)://(.*)/", "").replaceAll("¥¥uff57", "").replaceAll(args(1).toString, "")
         val analyzer = new JapaneseAnalyzer
@@ -63,28 +64,54 @@ object TwitterStreaming {
       }
 
     // (Apache, 1) (Spark, 1) というペアにします。２桁以上の文字を対象にアルファベット、数値のみは除外
-    val streamtemp2 = streamtemp.map(word => (if (word.length >= 2) word.replaceAll("(^[a-z]+$)", "").replaceAll("^[0-9]+$", "") else "", 1))
+    val wordAndOnePairRDD = tweetRDD.map(word => (if (word.length >= 2) word.replaceAll("(^[a-z]+$)", "deleteword").replaceAll("^[0-9]+$", "deleteword") else "deleteword", 1))
+
     // countup reduceByKey(_ + _) は　reduceByKey((x, y) => x + y) と等価です。
-    val streamtemp3 = streamtemp2.reduceByKey((a, b) => a + b )
+    val wordAndCountRDD = wordAndOnePairRDD.reduceByKey((a, b) => a + b )
+//    val wordAndCountRDD = wordAndOnePairRDD.reduceByKey(_ + _)
+
+    // key => value value => keyに変更 sort
+    val  countAndWordRDD = wordAndCountRDD.map{ wordAndWount => (wordAndWount._2, wordAndWount._1)}
+
+    // sort
+    val  sortedCWRDD = countAndWordRDD.transform(rdd => rdd.sortByKey(false))
+
+    // value => key key => valueに変更
+    val sortedCountAndWordRDD = sortedCWRDD.map{ countAndWord => (countAndWord._2, countAndWord._1)}
+
       // データ保存先をconfigから取得してdevとliveで保存先切り替える
-    streamtemp3.saveAsTextFiles(config.get("save.file.dir").toString)
+    sortedCountAndWordRDD.saveAsTextFiles(config.get("save.file.dir").toString)
 
     // streaming start
     ssc.start()
     ssc.awaitTermination()
   }
 
-  //  def dbconnection();
-  //  Unit = {
-  //    val dbDriver = "com.mysql.jdbc.Driver"
-  //    val dbUrl = "jdbc:mysql://localhost:3306/jdbcrdd?useUnicode=true&characterEncoding=UTF-8"
-  //    val dbUsername = "hogehoge"
-  //    val dbPassword = "piyopiyo"
-  //
-  //    val jdbcConnection = () => {
-  //      Class.forName(dbDriver).newInstance
-  //      DriverManager.getConnection(dbUrl, dbUsername, dbPassword)
-  //    }
-  //
-  //  }
+//    def dbconnection(dbuser: String, dbpassword: String) = {
+//      val dbDriver = "com.mysql.jdbc.Driver"
+//      val dbUrl = "jdbc:mysql://localhost:3306/jdbcrdd?useUnicode=true&characterEncoding=UTF-8"
+//      val dbUsername = dbuser
+//      val dbPassword = dbpassword
+//
+//      val jdbcConnection = () => {
+//        Class.forName(dbDriver).newInstance
+//        DriverManager.getConnection(dbUrl, dbUsername, dbPassword)
+//      }
+//
+//      val mysqlRDD = new JdbcRDD(
+//        context,
+//        jdbcConnection,
+//        "select * from trend"
+//        28,
+//        842105,
+//        10,
+//        r => r.getLong("id") + ", " + r.getString("token")
+//      )
+//
+//      val results = mysqlRDD.collect.toList
+//      println(s"results size = ${results.size}")
+//      System.exit(0)
+//      jdbcConnection
+//
+//    }
 }
