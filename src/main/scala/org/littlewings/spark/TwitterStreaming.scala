@@ -70,17 +70,21 @@ object TwitterStreaming {
     val wordAndCountRDD = wordAndOnePairRDD.reduceByKey((a, b) => a + b )
 //    val wordAndCountRDD = wordAndOnePairRDD.reduceByKey(_ + _)
 
-    // key => value value => keyに変更 sort
+    // key => value value => keyに変更
     val  countAndWordRDD = wordAndCountRDD.map{ wordAndWount => (wordAndWount._2, wordAndWount._1)}
 
-    // sort
+    // sort transformをかまさないとsortByKeyが使えない
     val  sortedCWRDD = countAndWordRDD.transform(rdd => rdd.sortByKey(false))
 
     // value => key key => valueに変更
     val sortedCountAndWordRDD = sortedCWRDD.map{ countAndWord => (countAndWord._2, countAndWord._1)}
 
+    // deleteword削除
+//    val finalRDD = sortedCountAndWordRDD - 2
+
+
       // データ保存先をconfigから取得してdevとliveで保存先切り替える
-    sortedCountAndWordRDD.saveAsTextFiles(config.get("save.file.dir").toString)
+    sortedCountAndWordRDD.saveAsTextFiles(config.get("save.file.dir").toString + args(1))
 
     // streaming start
     ssc.start()

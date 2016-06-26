@@ -4,7 +4,7 @@
 		module="streaming-tweet-build"
 		revision="0.1-SNAPSHOT"
 		status="integration"
-		publication="20160516131913"
+		publication="20160622115149"
 		e:sbtVersion="0.13" e:scalaVersion="2.10"
 	>
 		<description>
