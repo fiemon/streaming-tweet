@@ -62,8 +62,8 @@ object TwitterStreaming {
         }
       }
 
-    // (Apache, 1) (Spark, 1) というペアにします。
-    val streamtemp2 = streamtemp.map(word => (word, 1))
+    // (Apache, 1) (Spark, 1) というペアにします。２桁以上の文字を対象にアルファベット、数値のみは除外
+    val streamtemp2 = streamtemp.map(word => (if (word.length >= 2) word.replaceAll("(^[a-z]+$)", "").replaceAll("^[0-9]+$", "") else "", 1))
     // countup reduceByKey(_ + _) は　reduceByKey((x, y) => x + y) と等価です。
     val streamtemp3 = streamtemp2.reduceByKey((a, b) => a + b )
       // データ保存先をconfigから取得してdevとliveで保存先切り替える
