@@ -1,20 +1,27 @@
 package org.littlewings.spark
 
 //import org.apache.lucene.analysis.ja.JapaneseAnalyzer
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseAnalyzer
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.streaming.{Durations, StreamingContext}
 import java.util.Properties
+import java.sql.{Connection, DriverManager, ResultSet}
+
+
+//import org.atilika.kuromoji.{Token, Tokenizer}
 
 object TwitterStreaming {
+
   def main(args: Array[String]): Unit = {
+
     println("\n====================== Start. ======================")
     // Set Twitter Access Keys
-//    logger.debug(s"Some message!")
+    //    logger.debug(s"Some message!")
     val config = new java.util.Properties
-    config.load(this.getClass().getClassLoader().getResourceAsStream("twitter4j.properties"))
+    // todo: ipかなにかで  devとprod用で設定ファイルを切り替える
+    config.load(this.getClass().getClassLoader().getResourceAsStream("config.properties"))
     System.setProperty("twitter4j.oauth.consumerKey", config.get("oauth.consumerKey").toString)
     System.setProperty("twitter4j.oauth.consumerSecret", config.get("oauth.consumerSecret").toString)
     System.setProperty("twitter4j.oauth.accessToken", config.get("oauth.accessToken").toString)
@@ -25,15 +32,18 @@ object TwitterStreaming {
     //sparkconf 設定
     val conf = new SparkConf().setAppName("Twitter Streaming")
     // sparkstreamcontext設定
-    val ssc = new StreamingContext(conf, Durations.minutes(30L))
-    val filter = if (args.isEmpty) Nil else args.toList
-    val stream = TwitterUtils.createStream(ssc, None, filter)
-    println("\n====================== stream ======================")
-    println(stream)
+    val minuteunit: Long = if (args(0).isEmpty) 5 else args(0).toLong
+    val ssc = new StreamingContext(conf, Durations.minutes(minuteunit))
+    val filter = if (args(1).isEmpty) Nil else Array(args(1)).toList
 
-    stream
+    val stream = TwitterUtils.createStream(ssc, None, filter)
+
+    //    println(stream)
+    //    System.exit(0)
+
+    val streamtemp = stream
       .flatMap { status =>
-        val text = status.getText
+        val text = status.getText.replaceAll("http(s*)://(.*)/", "").replaceAll("¥¥uff57", "").replaceAll(args(1).toString, "")
         val analyzer = new JapaneseAnalyzer
         val tokenStream = analyzer.tokenStream("", text)
         val charAttr = tokenStream.addAttribute(classOf[CharTermAttribute])
@@ -49,14 +59,32 @@ object TwitterStreaming {
             .toVector
         } finally {
           tokenStream.end()
-          tokenStream.close()
         }
       }
-      .map(word => (word, 1))
-      .reduceByKey((a, b) => a + b)
-      .saveAsTextFiles("output/tweet")
 
+    // (Apache, 1) (Spark, 1) というペアにします。
+    val streamtemp2 = streamtemp.map(word => (word, 1))
+    // countup reduceByKey(_ + _) は　reduceByKey((x, y) => x + y) と等価です。
+    val streamtemp3 = streamtemp2.reduceByKey((a, b) => a + b )
+      // データ保存先をconfigから取得してdevとliveで保存先切り替える
+    streamtemp3.saveAsTextFiles(config.get("save.file.dir").toString)
+
+    // streaming start
     ssc.start()
     ssc.awaitTermination()
   }
+
+  //  def dbconnection();
+  //  Unit = {
+  //    val dbDriver = "com.mysql.jdbc.Driver"
+  //    val dbUrl = "jdbc:mysql://localhost:3306/jdbcrdd?useUnicode=true&characterEncoding=UTF-8"
+  //    val dbUsername = "hogehoge"
+  //    val dbPassword = "piyopiyo"
+  //
+  //    val jdbcConnection = () => {
+  //      Class.forName(dbDriver).newInstance
+  //      DriverManager.getConnection(dbUrl, dbUsername, dbPassword)
+  //    }
+  //
+  //  }
 }
