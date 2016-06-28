@@ -3,6 +3,10 @@ package org.littlewings.spark
 //import org.apache.lucene.analysis.ja.JapaneseAnalyzer
 import org.apache.spark.rdd.JdbcRDD
 import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseAnalyzer
+import java.io.StringReader
+import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseTokenizer
+import org.codelibs.neologd.ipadic.lucene.analysis.ja.tokenattributes.BaseFormAttribute
+import org.codelibs.neologd.ipadic.lucene.analysis.ja.tokenattributes.PartOfSpeechAttribute
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.apache.spark.SparkContext._
 import org.apache.spark.{SparkContext, SparkConf}
@@ -35,14 +39,30 @@ object TwitterStreaming {
     val minuteunit: Long = if (args(0).isEmpty) 5 else args(0).toLong
     val ssc = new StreamingContext(conf, Durations.minutes(minuteunit))
     val filter = if (args(1).isEmpty) Nil else Array(args(1)).toList
-
     val stream = TwitterUtils.createStream(ssc, None, filter)
+
+    // test用コードのためコメントアウト //
+//    val tokenizer = new JapaneseTokenizer(null, true, JapaneseTokenizer.DEFAULT_MODE)
+//    val text = ”これはテスト用の文言をいれるとこです。"
+//    tokenizer.setReader(new StringReader(text))
+//    val baseForm = tokenizer.addAttribute(classOf[BaseFormAttribute])
+//    val partOfSpeech = tokenizer.addAttribute(classOf[PartOfSpeechAttribute])
+//    val charTerm = tokenizer.addAttribute(classOf[CharTermAttribute])
+//
+//    tokenizer.reset()
+//    while (tokenizer.incrementToken()) {
+//      println(charTerm.toString + '\t' + baseForm.getBaseForm() + '\t' + partOfSpeech.getPartOfSpeech().split("-")(0) )
+//    }
+//    System.exit(0)
+    /////////////////////////////////
 
     val tweetRDD = stream
       .flatMap { status =>
         val text = status.getText.replaceAll("http(s*)://(.*)/", "").replaceAll("¥¥uff57", "").replaceAll(args(1).toString, "")
         val analyzer = new JapaneseAnalyzer
         val tokenStream = analyzer.tokenStream("", text)
+        val baseForm = tokenStream.addAttribute(classOf[BaseFormAttribute])
+        val partOfSpeech = tokenStream.addAttribute(classOf[PartOfSpeechAttribute])
         val charAttr = tokenStream.addAttribute(classOf[CharTermAttribute])
 
         //resetメソッドを呼んだ後に、incrementTokenメソッドでTokenを読み進めていく
@@ -52,7 +72,8 @@ object TwitterStreaming {
           Iterator
             .continually(tokenStream.incrementToken())
             .takeWhile(identity)
-            .map(_ => charAttr.toString)
+            // 品詞が名詞のものだけ抽出する
+            .map(_ => if (partOfSpeech.getPartOfSpeech().split("-")(0) == "名詞") charAttr.toString else "deleteword")
             .toVector
         } finally {
           tokenStream.end()
@@ -81,12 +102,9 @@ object TwitterStreaming {
     // value => key key => valueに変更
     val sortedCountAndWordRDD = sortedCWRDD.map { countAndWord => (countAndWord._2, countAndWord._1) }
 
-    // deleteword削除
-    //    val finalRDD = sortedCountAndWordRDD - 2
-
-
     // データ保存先をconfigから取得してdevとliveで保存先切り替える
     sortedCountAndWordRDD.saveAsTextFiles(config.get("save.file.dir").toString + args(1))
+//    sortedCountAndWordRDD.print()
 
     // streaming start
     ssc.start()
