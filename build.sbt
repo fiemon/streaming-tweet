@@ -18,6 +18,6 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-streaming-twitter" % "1.4.1" exclude("org.spark-project.spark", "unused"),
   "org.apache.lucene" % "lucene-analyzers-common" % "5.2.1",
 //  "org.apache.lucene" % "lucene-analyzers-kuromoji" % "5.2.1"
-  "org.codelibs" % "lucene-analyzers-kuromoji-ipadic-neologd" % "5.3.1-20151231"
+  "org.codelibs" % "lucene-analyzers-kuromoji-ipadic-neologd" % "6.0.0-20160613"
 //  "org.atilika.kuromoji" % "kuromoji" % "0.7.7"
 )
