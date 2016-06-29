@@ -73,24 +73,23 @@ object TwitterStreaming {
             .continually(tokenStream.incrementToken())
             .takeWhile(identity)
             // 品詞が名詞のものだけ抽出する
-            .map(_ => if (partOfSpeech.getPartOfSpeech().split("-")(0) == "名詞") charAttr.toString else "deleteword")
+            .map(_ => PartOfSpeechCheckConvert(partOfSpeech.getPartOfSpeech(), charAttr.toString))
             .toVector
         } finally {
           tokenStream.end()
         }
       }
 
-    // ２桁以上の文字を対象にアルファベット、数値のみはdeletewordという単語とする
-    val wordAndOnePairRDD = tweetRDD.map(word => (if (word.length >= 2) word.replaceAll("(^[a-z]+$)", "deleteword").replaceAll("^[0-9]+$", "deleteword") else "deleteword"))
-
-    // (Apache, 1) (Spark, 1) というペアにします。deletewordはゴミ単語なので0を設定
-    val deleteWordRDD = wordAndOnePairRDD.map(word => (word, word match {
-      case ("deleteword") => 0
+    // ２桁以上の文字を対象にアルファベット、数値のみはngwordという単語とする
+    val wordAndOnePairRDD = tweetRDD.map(word => (ngwordConvert(word)))
+    // (Apache, 1) (Spark, 1) というペアにします。ngwordはゴミ単語なので0を設定
+    val ngwordRDD = wordAndOnePairRDD.map(word => (word, word match {
+      case ("ngword") => 0
       case _ => 1
     }))
 
     // countup reduceByKey(_ + _) は　reduceByKey((x, y) => x + y) と等価です。
-    val wordAndCountRDD = deleteWordRDD.reduceByKey((a, b) => a + b)
+    val wordAndCountRDD = ngwordRDD.reduceByKey((a, b) => a + b)
     //    val wordAndCountRDD = wordAndOnePairRDD.reduceByKey(_ + _)
 
     // key => value value => keyに変更
@@ -109,6 +108,14 @@ object TwitterStreaming {
     // streaming start
     ssc.start()
     ssc.awaitTermination()
+  }
+
+  def PartOfSpeechCheckConvert(part: String, word: String) = {
+    if (part.split("-")(0) == "名詞") word else "ngword"
+  }
+
+  def ngwordConvert(word: String) = {
+    if (word.length >= 2) word.replaceAll("(^[a-z]+$)", "ngword").replaceAll("^[0-9]+$", "ngword") else "ngword"
   }
 
   //    def dbconnection(dbuser: String, dbpassword: String) = {
